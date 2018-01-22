@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Firebase Cloud Messaging Example</title>
+
+    <!-- Material Design Theming -->
+    <link rel="stylesheet" href="https://code.getmdl.io/1.1.3/material.orange-indigo.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <script defer src="https://code.getmdl.io/1.1.3/material.min.js"></script>
+    <link rel="manifest" href="/manifest.json">
+    <style>
+      code, pre {
+        word-break: break-all;
+        text-align: left;
+      }
+      header .mdl-grid {
+        padding-top: 0;
+        padding-bottom: 0;
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+      .mdl-layout__header-row {
+        padding-left: 0;
+        padding-right: 0;
+      }
+      .mdl-card__supporting-text {
+        margin: auto;
+        margin-bottom: 16px;
+      }
+      .shrinken {
+        width: 100%;
+      }
+      .block {
+        width: 100%;
+      }
+      .header-title {
+        background: url('/firebase-logo.png') no-repeat;
+        background-size: 40px;
+        padding-left: 50px;
+        margin: 8px 0;
+        color: white;
+      }
+      .code-container {
+        background: #f0f0f0;
+        padding: 16px;
+      }
+      .collapsible.collapse {
+        height: 0;
+        overflow: hidden;
+        padding-top: 0;
+        padding-bottom: 0;
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+      .collapsible.expand {
+        height: auto;
+      }
+      #account {
+        margin-bottom: 32px;
+      }
+      #no-message {
+        padding: 32px 0;
+      }
+      @media (min-width: 840px) {
+        .shrinken {
+          width: 769px;
+          margin: auto;
+        }
+        .block {
+          width: auto;
+        }
+      }
+    </style>
+
+    <script src="/__/firebase/4.9.0/firebase-app.js"></script>
+    <script src="/__/firebase/4.9.0/firebase-messaging.js"></script>
+    <script src="/__/firebase/init.js"></script>
+  </head>
+  <body>
+    <div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+      <header class="mdl-layout__header mdl-color-text--white mdl-color--cyan-600">
+        <div class="mdl-cell mdl-cell--12-col mdl-grid">
+          <div class="mdl-layout__header-row mdl-cell mdl-cell--12-col mdl-cell--12-col-tablet mdl-cell--12-col-desktop">
+          <div class="shrinken">
+            <h4 class="header-title">FCM Device Simulator</h4>
+          </div>
+        </div>
+        </div>
+      </header>
+    
+      <main class="mdl-layout__content mdl-color--grey-100">
+        <div class="mdl-cell mdl-cell--12-col mdl-grid">
+          
+          <div class="shrinken">
+            <div id="account" class="mdl-card mdl-shadow--2dp mdl-cell mdl-cell--12-col mdl-cell--12-col-tablet mdl-cell--4-col-phone mdl-cell--12-col-desktop">
+              <div class="mdl-card__supporting-text mdl-color-text--grey-600">
+                <div id="token_div" class="mdl-typography--text-center" style="display: none;">
+                  <h4>Instance ID Token</h4>
+                  <p class="code-container mdl-typography--text-left"><code id="token"></code></p>
+                  <button class="mdl-button mdl-js-button mdl-button--raised mdl-color--orange-600 block"
+                          onclick="deleteToken()">Refresh Token</button>
+                </div>
+                <div id="permission_div" class="mdl-typography--text-center" style="display: none;">
+                  <h4>Needs Permission</h4>
+                  <p class="code-container mdl-typography--text-left"><code id="token"></code></p>
+                  <button class="mdl-button mdl-js-button mdl-button--raised mdl-color--orange-600 block"
+                          onclick="requestPermission()">Request Permission</button>
+                </div>
+                <div id="messages"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="message-list-container" class="shrinken" style="display:none;">
+            <h5 class="mdl-cell mdl-cell--12-col mdl-color-text--grey">Messages</h5>
+            <table id="message-list" class="mdl-data-table mdl-js-data-table mdl-shadow--2dp mdl-cell mdl-cell--12-col mdl-cell--12-col-tablet mdl-cell--12-col-desktop">
+              <tbody>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="no-message" class="shrinken mdl-typography--text-center">
+            <h5 class="mdl-cell mdl-cell--12-col mdl-color-text--grey">No message to display.</h5>
+          </div>
+
+        </div>
+      </main>
+
+      <div id="snackbar" class="mdl-js-snackbar mdl-snackbar">
+        <div class="mdl-snackbar__text"></div>
+        <button class="mdl-snackbar__action" type="button"></button>
+      </div>
+    </div>
+
+    <script>
+      const messaging = firebase.messaging();
+      const tokenDivId = 'token_div';
+      const permissionDivId = 'permission_div';
+
+      messaging.onTokenRefresh(function() {
+        messaging.getToken()
+        .then(function(refreshedToken) {
+          showSnackBar('Token refreshed.');
+          setTokenSentToServer(false);
+          sendTokenToServer(refreshedToken);
+          resetUI();
+        })
+        .catch(function(error) {
+          showToken('Unable to retrieve refreshed token.', error);
+        });
+      });
+
+      messaging.onMessage(function(payload) {
+        showHideDiv('message-list-container', true);
+        showHideDiv('no-message', false);
+        showSnackBar('New message received.');
+        appendMessageToList(payload);
+      });
+      
+      function resetUI() {
+        clearMessages();
+        clearMessageList();
+        showToken('loading...');
+
+        messaging.getToken()
+        .then(function(currentToken) {
+          if (currentToken) {
+            showSnackBar('Token retrieved.');
+            sendTokenToServer(currentToken);
+            updateUIForPushEnabled(currentToken);
+          } else {
+            showToken('No instance ID token available. Request permission to generate one.');
+            updateUIForPushPermissionRequired();
+            setTokenSentToServer(false);
+          }
+        })
+        .catch(function(error) {
+          showToken('Error retrieving instance ID token.', error);
+          setTokenSentToServer(false);
+        })
+      }
+
+      function showToken(currentToken) {
+        const tokenElement = document.querySelector('#token');
+        tokenElement.textContent = currentToken;
+      }
+
+      function sendTokenToServer(currentToken) {
+        if (!isTokenSentToServer()) {
+          showSnackBar('Sending token to server...');
+          setTokenSentToServer(true);
+        } else {
+          showSnackBar('Token already sent to server so won\'t send ot again unless it changes');
+        }
+      }
+
+      function isTokenSentToServer() {
+        return window.localStorage.getItem('sentToServer') == 1;
+      }
+
+      function setTokenSentToServer(sent) {
+        window.localStorage.setItem('sentToServer', sent ? 1 : 0);
+      }
+
+      function showHideDiv(divId, show) {
+        const div = document.querySelector('#' + divId);
+        if (show) {
+          div.style = "display: visible";
+        } else {
+          div.style = "display: none"
+        }
+      }
+
+      function requestPermission() {
+        showSnackBar('Requesting permission...');
+        messaging.requestPermission()
+        .then(function() {
+          showSnackBar('Notification permission granted');
+          resetUI();
+        })
+        .catch(function(error) {
+          showSnackBar('Unable to get permission to notify.');
+          console.log('Unable to get permission to notify.', error);
+        });
+      }
+
+      function deleteToken() {
+        messaging.getToken()
+        .then(function(currentToken) {
+          messaging.deleteToken(currentToken)
+          .then(function() {
+            showSnackBar('Token deleted.');
+            setTokenSentToServer(false);
+            resetUI();
+          })
+          .catch(function(error) {
+            showSnackBar('Unable to delete token.');
+            console.log('Unable to delete token.', error);
+          })
+        })
+        .catch(function(error) {
+          showToken('Error retrieving Instance ID token.', error);
+        })
+      }
+
+      function appendMessage(payload) {
+        const messagesElement = document.querySelector('#messages');
+        const dataHeaderElement = document.createElement('h5');
+        const dataElement = document.createElement('pre');
+        dataElement.style = 'overflow-x: hidden';
+        dataHeaderElement.textContent = 'Received message:';
+        dataElement.textContent = JSON.stringify(payload, null, 2);
+        messagesElement.appendChild(dataHeaderElement);
+        messagesElement.appendChild(dataElement);
+      }      
+
+      function clearMessages() {
+        const messagesElement = document.querySelector('#messages');
+        while (messagesElement.hasChildNodes()) {
+          messagesElement.removeChild(messagesElement.lastChild);
+        }
+      }
+
+      function updateUIForPushEnabled(currentToken) {
+        showHideDiv(tokenDivId, true);
+        showHideDiv(permissionDivId, false);
+        showToken(currentToken);
+      }
+
+      function updateUIForPushPermissionRequired() {
+        showHideDiv(tokenDivId, false);
+        showHideDiv(permissionDivId, true);
+      }
+
+      function showSnackBar(message) {
+        const snackbarElement = document.querySelector('#snackbar');
+        const data = {
+          message,
+          timeout: 2000
+        };
+        snackbarElement.MaterialSnackbar.showSnackbar(data);
+      }
+
+      function appendMessageToList(payload) {
+        const title = payload.notification.title;
+        const body = payload.notification.body;
+        const now = new Date();
+        const tableBody = document.querySelector('#message-list > tbody');
+        const row = document.createElement('tr');
+        const iconCol = document.createElement('td');
+        const contentCol = document.createElement('td');
+        const dateCol = document.createElement('td');
+        const icon = document.createElement('i');
+        const titleElement = document.createElement('strong');
+        const bodyElement = document.createElement('div');
+        const dateElement = document.createElement('div');
+        const payloadContainer = document.createElement('p');
+        const payloadElement = document.createElement('pre');
+        const secondaryContent = document.createElement('div');
+
+        const messageDate = `
+          ${now.getFullYear()}-${('0' + now.getMonth()).slice(-2)}-${('0' + now.getDate()).slice(-2)} 
+          ${('0' + now.getHours()).slice(-2)}:${('0' + now.getMinutes()).slice(-2)}:${('0' + now.getSeconds()).slice(-2)}`;
+
+        icon.className = 'material-icons mdl-list__item-avatar';
+        icon.textContent = 'notifications';
+        iconCol.style = 'text-align: center; max-width: 70px;';
+        iconCol.appendChild(icon);
+
+        titleElement.textContent = title;
+        bodyElement.textContent = body;
+        bodyElement.style = 'white-space: initial;';
+        dateElement.className = 'mdl-color-text--grey mdl-cell--hide-table mdl-cell--hide-desktop';
+        dateElement.style = 'margin-top: 16px;'
+        dateElement.textContent = messageDate;
+        payloadContainer.className = 'payload-container code-container mdl-typography--text-left collapsible collapse';
+        payloadElement.style = 'overflow: auto;';
+        payloadElement.textContent = JSON.stringify(payload, null, 2);
+        payloadContainer.appendChild(payloadElement);
+
+        contentCol.style = 'text-align: left; max-width: 190px';
+        contentCol.appendChild(titleElement);
+        contentCol.appendChild(bodyElement);
+        contentCol.appendChild(dateElement);
+        contentCol.appendChild(payloadContainer);
+
+        secondaryContent.className = 'mdl-color-text--grey mdl-cell--hide-phone';
+        secondaryContent.textContent = messageDate;
+        dateCol.style = 'text-align: center;';
+        dateCol.appendChild(secondaryContent);
+
+        row.appendChild(iconCol);
+        row.appendChild(contentCol);
+        row.appendChild(dateCol);
+        row.addEventListener('click', function(event) {
+          const element = event.target;
+          const row = element.closest('tr');
+          const payloadContainer = row.querySelector('.payload-container');
+          if (payloadContainer.className.includes('collapse')) {
+            payloadContainer.className = payloadContainer.className.replace('collapse', 'expand');
+          } else {
+            if (payloadContainer.className.includes('expand')) {
+              payloadContainer.className = payloadContainer.className.replace('expand', 'collapse');  
+            }
+          }
+        });
+        tableBody.appendChild(row);
+      }
+
+      function clearMessageList() {
+        const tableBody = document.querySelector('#message-list > tbody');
+        while (tableBody.hasChildNodes()) {
+          tableBody.removeChild(tableBody.lastChild);
+        }
+        showHideDiv('message-list-container', false);
+      }
+
+      resetUI();
+    </script>
+  </body>
+</html>
