@@ -9,9 +9,10 @@ See [this documentation](https://github.com/firebase/quickstart-js/tree/master/m
 2. Install [Firebase CLI](https://firebase.google.com/docs/cli/) by running `npm install -g firebase-tools`. (Make sure you have Node.js and npm already installed).
 3. Configure Firebase CLI credential using `firebase login` and follow the steps shown in the console.
 4. Go to project directory and change the value of `default` property inside `.firebaserc` file with the name of project you have created.
-5. Run `firebase server` to fire up a local server containing your project
-6. or run `firebase deploy` to upload your project into [Firebase Hosting](https://firebase.google.com/docs/hosting/).
-7. After deploying into Firebase Hosting, you can access your project from URL `<your-project-name>.firebaseapp.com`.
+5. Run `firebase use [your firebase project ID]` to set current project with your Firebase Project. Project ID can be found in Firebase Console -> Project Settings -> General Tab.
+6. Run `firebase server` to fire up a local server containing your project
+7. or run `firebase deploy` to upload your project into [Firebase Hosting](https://firebase.google.com/docs/hosting/).
+8. After deploying into Firebase Hosting, you can access your project from URL `<your-project-name>.firebaseapp.com`.
 
 ## Credits
 
